@@ -1,0 +1,14 @@
+# transformers is pinned: the head was trained on embeddings from 4.45.0.
+# Newer versions change the embedding slightly (cosine ~0.98) and shift the probabilities.
+transformers==4.45.0
+huggingface_hub==0.36.2
+safetensors==0.7.0
+torch>=2.2
+xgboost==3.0.2
+librosa==0.11.0
+soundfile==0.13.1
+numpy>=1.26,<2.3
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+requests>=2.31

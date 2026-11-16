@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+examples/audio/*
+!examples/audio/README.md
+*.safetensors
+model/ast/
