@@ -11,5 +11,5 @@ COPY model/ model/
 ARG AST_MODEL=willychenwii/pig-respiratory-ast
 ENV AST_MODEL=${AST_MODEL} HF_HOME=/srv/hf
 RUN python -c "import os; from transformers import ASTModel, ASTFeatureExtractor as F; m=os.environ['AST_MODEL']; F.from_pretrained(m); ASTModel.from_pretrained(m)"
-ENV PORT=8080
+ENV PORT=8080 HF_HUB_OFFLINE=1
 CMD cd app && uvicorn main:app --host 0.0.0.0 --port ${PORT}

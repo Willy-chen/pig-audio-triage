@@ -87,15 +87,19 @@ docker run -p 8080:8080 pig-audio-triage
 python examples/test_client.py my_recording.wav          # in another terminal
 ```
 The build downloads the AST weights from Hugging Face once, so the container starts without internet.
-Image size is about 3 GB (CPU-only PyTorch). If you have the weights locally instead, put them in `model/ast/` and build
-with `--build-arg AST_MODEL=/srv/model/ast`.
+Image size is about 3 GB (CPU-only PyTorch). To build from a local copy of the weights instead (e.g. behind a firewall):
+```bash
+python scripts/download_model.py                 # -> model/ast/ (checksum-verified)
+docker build -t pig-audio-triage --build-arg AST_MODEL=/srv/model/ast .
+```
 
 ### Option B: plain Python (3.10+)
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install torch --index-url https://download.pytorch.org/whl/cpu   # or the CUDA build
 pip install -r requirements.txt
-cd app && uvicorn main:app --port 8080
+python scripts/download_model.py                 # downloads the AST weights (~345 MB) to model/ast/ and verifies them
+cd app && AST_MODEL=../model/ast uvicorn main:app --port 8080
 ```
 
 ### Cloud deployment
@@ -126,7 +130,7 @@ A 1-minute recording takes ~4–12 s on a CPU-only container. A GPU isn't needed
 
 ## 5. Where the model comes from
 
-- **AST**: `MIT/ast-finetuned-audioset-10-10-0.4593`, fine-tuned on stethoscope recordings of 16 pigs from a commercial
+- **AST** ([willychenwii/pig-respiratory-ast](https://huggingface.co/willychenwii/pig-respiratory-ast)): `MIT/ast-finetuned-audioset-10-10-0.4593`, fine-tuned on stethoscope recordings of 16 pigs from a commercial
   farm (NPUST × NTU), checkpoint `20260209_n`. This is the model used in the paper *"Hybrid AST-XGBoost Architecture for
   Pig Respiratory Health Monitoring in Noisy Farm Environments"* (Chen, Huang, Xu, Jang; under review at *Computers and
   Electronics in Agriculture*). Code: <https://github.com/Willy-chen/pig-respiratory-monitor>.
@@ -156,6 +160,7 @@ A 1-minute recording takes ~4–12 s on a CPU-only container. A GPU isn't needed
 app/main.py            HTTP API (FastAPI)
 app/triage.py          model loading + audio → traffic light (thresholds at the top)
 model/xgb_head.json    XGBoost classifier (the AST weights are downloaded from Hugging Face)
+scripts/download_model.py  download + checksum-verify the AST weights into model/ast/
 scripts/train_head.py  re-train the XGBoost head from the published embeddings
 examples/test_client.py  send files to the server from the command line
 examples/sample_response.json
