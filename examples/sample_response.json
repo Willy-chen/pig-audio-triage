@@ -11,6 +11,11 @@
         "p_abnormal": 0.5027,
         "experimental": true
     },
+    "probabilities": {
+        "no_breathing": 0.0352,
+        "normal": 0.4622,
+        "abnormal": 0.5027
+    },
     "duration_s": 12.0,
     "segments": [
         {
@@ -18,15 +23,25 @@
             "end_s": 10.0,
             "breathing": true,
             "p_breathing": 0.9976,
-            "p_abnormal": 0.9952
+            "p_abnormal": 0.9952,
+            "probabilities": {
+                "no_breathing": 0.002,
+                "normal": 0.0028,
+                "abnormal": 0.9952
+            }
         },
         {
             "start_s": 10.0,
             "end_s": 12.0,
             "breathing": true,
             "p_breathing": 0.9867,
-            "p_abnormal": 0.0101
+            "p_abnormal": 0.0101,
+            "probabilities": {
+                "no_breathing": 0.0684,
+                "normal": 0.9216,
+                "abnormal": 0.0101
+            }
         }
     ],
-    "processing_s": 1.38
+    "processing_s": 2.18
 }

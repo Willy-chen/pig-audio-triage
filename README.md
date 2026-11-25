@@ -91,14 +91,25 @@ Full example: [`examples/sample_response.json`](examples/sample_response.json).
   "status": "red",
   "breathing": {"status": "detected", "p_breathing": 0.9921, "breathing_clips": 2, "total_clips": 2},
   "disease":   {"status": "abnormal", "p_abnormal": 0.5027, "experimental": true},
+  "probabilities": {"no_breathing": 0.0352, "normal": 0.4622, "abnormal": 0.5027},
   "duration_s": 12.0,
   "segments": [
-    {"start_s": 0.0,  "end_s": 10.0, "breathing": true, "p_breathing": 0.9976, "p_abnormal": 0.9952},
-    {"start_s": 10.0, "end_s": 12.0, "breathing": true, "p_breathing": 0.9867, "p_abnormal": 0.0101}
+    {"start_s": 0.0,  "end_s": 10.0, "breathing": true, "p_breathing": 0.9976, "p_abnormal": 0.9952,
+     "probabilities": {"no_breathing": 0.002, "normal": 0.0028, "abnormal": 0.9952}},
+    {"start_s": 10.0, "end_s": 12.0, "breathing": true, "p_breathing": 0.9867, "p_abnormal": 0.0101,
+     "probabilities": {"no_breathing": 0.0684, "normal": 0.9216, "abnormal": 0.0101}}
   ],
   "processing_s": 1.4
 }
 ```
+Fields:
+- `probabilities`: the disease head's 3-class output (no breathing / normal / abnormal), averaged over **all** clips
+  (per clip in `segments`). Useful for charts and for the researcher view.
+- `disease.p_abnormal`: P(abnormal) averaged over the **breathing clips only**, which is what the disease decision
+  uses. It equals `probabilities.abnormal` when every clip contains breathing, and is higher when some clips are silent.
+- `breathing.p_breathing`: from the separate breathing head, which is more reliable for "is there breathing" than
+  `1 - probabilities.no_breathing`.
+
 Errors: `400` (unreadable audio / download failed), `413` (file > 50 MB, change with `MAX_UPLOAD_MB`).
 
 ## 3. Run it

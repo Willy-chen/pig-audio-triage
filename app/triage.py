@@ -14,6 +14,7 @@ MIN_TAIL_S = 2.0          # a trailing piece shorter than this is dropped (unles
 
 T_BREATHING = 0.70        # clip counts as "breathing" if P(breathing) >= 0.70
 MIN_BREATHING_FRAC = 0.5  # recording counts as "breathing detected" if >= half of its clips are breathing
+CLASSES = ("no_breathing", "normal", "abnormal")
 T_ABNORMAL = 0.25         # disease (experimental): "abnormal" if mean P(abnormal) over breathing clips >= 0.25
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -62,7 +63,8 @@ class Triage:
         clips = self.clips(y)
         D = xgb.DMatrix(np.stack([self.embed(seg) for _, seg in clips]))
         p_breath = self.breathing_head.predict(D)
-        p_abn = self.disease_head.predict(D)[:, 2]
+        P3 = self.disease_head.predict(D)               # 3-class probabilities per clip
+        p_abn = P3[:, 2]
         is_breath = p_breath >= T_BREATHING
 
         detected = is_breath.mean() >= MIN_BREATHING_FRAC
@@ -91,10 +93,12 @@ class Triage:
             "status": status,
             "breathing": breathing,
             "disease": disease,
+            "probabilities": {c: round(float(v), 4) for c, v in zip(CLASSES, P3.mean(0))},
             "duration_s": round(duration, 2),
             "segments": [
                 {"start_s": round(t, 2), "end_s": round(min(t + CLIP_S, duration), 2),
-                 "breathing": bool(b), "p_breathing": round(float(pb), 4), "p_abnormal": round(float(pa), 4)}
-                for (t, _), b, pb, pa in zip(clips, is_breath, p_breath, p_abn)
+                 "breathing": bool(b), "p_breathing": round(float(pb), 4), "p_abnormal": round(float(pa), 4),
+                 "probabilities": {c: round(float(v), 4) for c, v in zip(CLASSES, p3)}}
+                for (t, _), b, pb, pa, p3 in zip(clips, is_breath, p_breath, p_abn, P3)
             ],
         }
