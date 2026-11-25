@@ -1,72 +1,32 @@
 {
-    "status": "green",
-    "probabilities": {
-        "no_breathing": 0.0011,
-        "normal": 0.9988,
-        "abnormal": 0.0001
+    "status": "red",
+    "breathing": {
+        "status": "detected",
+        "p_breathing": 0.9921,
+        "breathing_clips": 2,
+        "total_clips": 2
     },
-    "duration_s": 60.0,
+    "disease": {
+        "status": "abnormal",
+        "p_abnormal": 0.5027,
+        "experimental": true
+    },
+    "duration_s": 12.0,
     "segments": [
         {
             "start_s": 0.0,
             "end_s": 10.0,
-            "status": "green",
-            "probabilities": {
-                "no_breathing": 0.0003,
-                "normal": 0.9996,
-                "abnormal": 0.0001
-            }
+            "breathing": true,
+            "p_breathing": 0.9976,
+            "p_abnormal": 0.9952
         },
         {
             "start_s": 10.0,
-            "end_s": 20.0,
-            "status": "green",
-            "probabilities": {
-                "no_breathing": 0.0003,
-                "normal": 0.9996,
-                "abnormal": 0.0001
-            }
-        },
-        {
-            "start_s": 20.0,
-            "end_s": 30.0,
-            "status": "green",
-            "probabilities": {
-                "no_breathing": 0.0023,
-                "normal": 0.9976,
-                "abnormal": 0.0001
-            }
-        },
-        {
-            "start_s": 30.0,
-            "end_s": 40.0,
-            "status": "green",
-            "probabilities": {
-                "no_breathing": 0.0012,
-                "normal": 0.9988,
-                "abnormal": 0.0001
-            }
-        },
-        {
-            "start_s": 40.0,
-            "end_s": 50.0,
-            "status": "green",
-            "probabilities": {
-                "no_breathing": 0.0017,
-                "normal": 0.9982,
-                "abnormal": 0.0001
-            }
-        },
-        {
-            "start_s": 50.0,
-            "end_s": 60.0,
-            "status": "green",
-            "probabilities": {
-                "no_breathing": 0.0007,
-                "normal": 0.9992,
-                "abnormal": 0.0001
-            }
+            "end_s": 12.0,
+            "breathing": true,
+            "p_breathing": 0.9867,
+            "p_abnormal": 0.0101
         }
     ],
-    "processing_s": 4.04
+    "processing_s": 1.38
 }

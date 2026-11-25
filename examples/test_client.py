@@ -22,7 +22,10 @@ for path in a.files:
         print(f"{path}: HTTP {r.status_code} {r.text}")
         continue
     res = r.json()
-    print(f"{ICON[res['status']]} {res['status']:6s} {path}  {res['probabilities']}  "
-          f"({res['duration_s']} s audio, {len(res['segments'])} clips, {res['processing_s']} s)")
+    b, d = res["breathing"], res["disease"]
+    print(f"{ICON[res['status']]} {res['status']:6s} {path.split('/')[-1]}\n"
+          f"     breathing: {b['status']} (P={b['p_breathing']}, {b['breathing_clips']}/{b['total_clips']} clips)  |  "
+          f"disease [experimental]: {d['status']} (P(abnormal)={d['p_abnormal']})  |  "
+          f"{res['duration_s']} s audio, {res['processing_s']} s")
     if a.full:
         print(json.dumps(res, indent=2, ensure_ascii=False))
