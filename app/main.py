@@ -36,12 +36,12 @@ def run(data: bytes, suffix: str):
     with tempfile.NamedTemporaryFile(suffix=suffix) as f:
         f.write(data)
         f.flush()
-        t0 = time.time()
+        t0 = time.perf_counter()
         try:
             res = model.analyze(f.name)
         except Exception as e:  # unreadable / unsupported audio
             raise HTTPException(400, f"could not analyze audio ({type(e).__name__}: {e})")
-    res["processing_s"] = round(time.time() - t0, 2)
+    res["processing_s"] = round(time.perf_counter() - t0, 2)
     return res
 
 
