@@ -132,6 +132,8 @@ docker build -t pig-audio-triage .
 docker run -p 8080:8080 pig-audio-triage
 python examples/test_client.py my_recording.wav          # in another terminal
 ```
+Or open `examples/demo.html` in a browser: a one-file upload page (plain HTML + `fetch`) that shows every field of the
+response. Point it at another server with `demo.html?api=https://your-server`. A handy starting point for the web app.
 The build downloads the AST weights from Hugging Face once, so the container starts without internet.
 Image size is about 3 GB (CPU-only PyTorch). To build from a local copy of the weights instead (e.g. behind a firewall):
 ```bash
@@ -202,6 +204,11 @@ A 1-minute recording takes ~4–12 s on a CPU-only container. A GPU isn't needed
   | Disease, 10 new clips (all 4 kHz) from Prof. Huang's lab | sick pigs: 5 / 5 abnormal. Healthy pigs: 3 / 5 wrongly abnormal |
   | Breathing type, 4 classes | macro F1 **0.20** (chance 0.25). Light breathing exists in only 2 pigs and is never recognised; accuracy per held-out pig ranges 0–100 %, i.e. it mostly recognises the recording. Earlier tests with five other methods (loudness, OPERA, CLAP, audio LLMs) gave the same result |
 
+  **End to end** (the server's own breathing check, then disease on the clips it passes, each pig held out; 16
+  recordings): abnormal pigs 4 red / 1 green / 2 yellow, normal pigs 6 green / 0 red / 3 yellow. All 31 abnormal clips
+  recorded at 4 kHz were rejected by the breathing check, so both abnormal 4 kHz pigs came out **yellow**, and every
+  correct red came from a 16 kHz recording. The breathing check also let through 95 of 533 silent clips.
+
   The paper's 3-class score (macro F1 0.871) used full-band audio and mostly reflects the recording-format difference
   described in §1, so it does not carry over to this server. The disease head needs normal and abnormal pigs
   recorded with the same device and procedure before it can be trusted.
@@ -211,6 +218,8 @@ A 1-minute recording takes ~4–12 s on a CPU-only container. A GPU isn't needed
 ## 6. Known limitations
 
 - **Disease and breathing type are experimental** (see §5). Breathing detection is the dependable part.
+- At 4 kHz the breathing check tends to reject abnormal breathing as "no breathing" (see §5), so a sick pig may get
+  yellow ("re-record") rather than red.
 - Trained on **stethoscope** recordings. Phone-microphone or video audio is out of distribution, so expect more yellow
   results and less reliable colours. The 4 kHz reduction removes the file-format effect, but other differences between
   recording setups (background noise, gain, placement) can still influence the disease score.
@@ -230,6 +239,7 @@ scripts/extract_features.py band-limited AST embeddings from labelled clips (lab
 scripts/train_heads.py      train the breathing + disease heads from those embeddings
 scripts/train_breathing_type.py  train + evaluate the breathing-type head (lab only: needs the raw audio and labels)
 examples/test_client.py  send files to the server from the command line
+examples/demo.html       one-file browser upload page showing the full response
 examples/sample_response.json
 Dockerfile, requirements.txt
 ```
