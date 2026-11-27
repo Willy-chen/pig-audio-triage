@@ -4,6 +4,7 @@ A small Python server for the 晶創 platform: **upload a pig breathing recordin
 
 1. **Breathing**: is there clear pig breathing in the recording? *(reliable)*
 2. **Disease**: does the breathing sound normal or abnormal? *(experimental, see the warning below)*
+3. **Breathing type**: breathing / light / heavy / heavy with noises, as 4 probabilities *(experimental, close to random, see §5)*
 
 plus one combined traffic light (🟢 / 🟡 / 🔴) for a simple farmer view.
 The web app (Firebase) calls this server over HTTP. The server holds the ML model, so the web app doesn't need Python.
@@ -23,6 +24,7 @@ audio file (wav / mp3 / m4a / flac, any length, any sample rate)
   → fine-tuned Audio Spectrogram Transformer (AST)   → 768-number "embedding" per clip
   → breathing head (XGBoost)                        → P(breathing) per clip
   → disease head (XGBoost, experimental)            → P(abnormal) per clip
+  → breathing-type head (XGBoost, experimental)     → P(breathing / light / heavy / heavy with noises) per clip
 ```
 
 **Why 4 kHz?** Recordings come in at anything from 4 kHz (stethoscope) to 48 kHz (phones). In our training data the
@@ -37,6 +39,7 @@ format it arrives in. Breathing sounds sit well below 2 kHz.
 |---|---|---|
 | **Breathing** | a clip is "breathing" if P(breathing) ≥ 0.70; the recording is `detected` if at least half its clips are | `detected` / `not_detected` |
 | **Disease** *(experimental)* | mean P(abnormal) over the **breathing clips only** ≥ 0.25 → `abnormal` | `normal` / `abnormal` / `unknown` (no breathing clips) |
+| **Breathing type** *(experimental)* | mean of the 4 probabilities over the **breathing clips only**; `type` = the highest | `breathing` / `light_breathing` / `heavy_breathing` / `heavy_breathing_with_noises` / `null` |
 
 ### Combined traffic light (`status`)
 
@@ -48,7 +51,7 @@ format it arrives in. Breathing sounds sit well below 2 kHz.
 
 For a comparison view (e.g. the researcher page), show `breathing` and `disease` separately rather than only `status`.
 Every 10 s clip also gets its own `p_breathing` / `p_abnormal`, so the UI can show *where* in the recording things happen.
-Thresholds live at the top of `app/triage.py`.
+Breathing type does not affect the traffic light. Thresholds live at the top of `app/triage.py`.
 
 ## 2. API
 
@@ -73,6 +76,7 @@ const res = await fetch(`${API}/analyze`, { method: "POST", body: fd }).then(r =
 // res.status === "green" | "yellow" | "red"
 // res.breathing.status === "detected" | "not_detected"
 // res.disease.status === "normal" | "abnormal" | "unknown"   (experimental)
+// res.breathing_type.probabilities.heavy_breathing ...        (experimental)
 ```
 
 ### `POST /analyze_url`: analyse a file that is already in storage
@@ -91,13 +95,18 @@ Full example: [`examples/sample_response.json`](examples/sample_response.json).
   "status": "red",
   "breathing": {"status": "detected", "p_breathing": 0.9921, "breathing_clips": 2, "total_clips": 2},
   "disease":   {"status": "abnormal", "p_abnormal": 0.5027, "experimental": true},
+  "breathing_type": {"type": "heavy_breathing", "experimental": true,
+                     "probabilities": {"breathing": 0.1815, "light_breathing": 0.0054,
+                                       "heavy_breathing": 0.7965, "heavy_breathing_with_noises": 0.0166}},
   "probabilities": {"no_breathing": 0.0352, "normal": 0.4622, "abnormal": 0.5027},
   "duration_s": 12.0,
   "segments": [
     {"start_s": 0.0,  "end_s": 10.0, "breathing": true, "p_breathing": 0.9976, "p_abnormal": 0.9952,
-     "probabilities": {"no_breathing": 0.002, "normal": 0.0028, "abnormal": 0.9952}},
+     "probabilities": {"no_breathing": 0.002, "normal": 0.0028, "abnormal": 0.9952},
+     "breathing_type": {"breathing": 0.0, "...": 0.0}},
     {"start_s": 10.0, "end_s": 12.0, "breathing": true, "p_breathing": 0.9867, "p_abnormal": 0.0101,
-     "probabilities": {"no_breathing": 0.0684, "normal": 0.9216, "abnormal": 0.0101}}
+     "probabilities": {"no_breathing": 0.0684, "normal": 0.9216, "abnormal": 0.0101},
+     "breathing_type": {"breathing": 0.0, "...": 0.0}}
   ],
   "processing_s": 1.4
 }
@@ -107,6 +116,9 @@ Fields:
   (per clip in `segments`). Useful for charts and for the researcher view.
 - `disease.p_abnormal`: P(abnormal) averaged over the **breathing clips only**, which is what the disease decision
   uses. It equals `probabilities.abnormal` when every clip contains breathing, and is higher when some clips are silent.
+- `breathing_type`: 4 probabilities from a third head, averaged over breathing clips (`null` if there are none); also
+  per clip in `segments`. "With noises" means **electronic noise from the recording device**, not a lung sound.
+  Close to random on pigs it hasn't seen (see §5): show it as an experimental score, not a finding.
 - `breathing.p_breathing`: from the separate breathing head, which is more reliable for "is there breathing" than
   `1 - probabilities.no_breathing`.
 
@@ -150,6 +162,7 @@ Environment variables:
 | `AST_MODEL` | `willychenwii/pig-respiratory-ast` | Hugging Face repo id or local folder with the AST weights |
 | `BREATHING_HEAD` | `model/breathing_head.json` | breathing classifier (included in this repo) |
 | `DISEASE_HEAD` | `model/disease_head.json` | disease classifier (included in this repo) |
+| `BREATHING_TYPE_HEAD` | `model/breathing_type_head.json` | breathing-type classifier (included in this repo) |
 | `MAX_UPLOAD_MB` | `50` | Upload size limit |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins. Set to the web app's domain in production |
 | `PORT` | `8080` | (Docker only) listening port |
@@ -159,7 +172,7 @@ Environment variables:
 | | Size | Time per 10 s clip |
 |---|---|---|
 | AST (fine-tuned, 86 M parameters) | 345 MB | ~25 ms on GPU (RTX 4080), ~0.3–2 s on CPU |
-| XGBoost heads (2) | 0.8 MB | < 1 ms |
+| XGBoost heads (3) | 1.5 MB | < 1 ms |
 
 A 1-minute recording takes ~4–12 s on a CPU-only container. A GPU isn't needed for the demo.
 
@@ -175,6 +188,9 @@ A 1-minute recording takes ~4–12 s on a CPU-only container. A GPU isn't needed
   - `breathing_head.json`: breathing (normal or abnormal) vs no breathing; breathing class weight ×3.
   - `disease_head.json`: 3-class no-breathing / normal / abnormal; class weights normal ×3, abnormal ×5.
     The server uses its P(abnormal).
+  - `breathing_type_head.json`: 4-class breathing / light / heavy / heavy with noises, class-balanced. Trained on a
+    different set: 1,355 10 s windows from 12 pigs (all 4 kHz) cut from the vets' Audacity labels
+    (`scripts/train_breathing_type.py`, lab paths).
   - Re-create: `python scripts/extract_features.py segments.csv feats.pkl` then
     `python scripts/train_heads.py feats.pkl`. Needs the raw farm audio, which is not public (data-use agreement).
 - **How well it works** (leave-one-pig-out: each pig scored by a model that never saw it):
@@ -184,6 +200,7 @@ A 1-minute recording takes ~4–12 s on a CPU-only container. A GPU isn't needed
   | Breathing vs no breathing | macro F1 **0.86**, AUC 0.92 (same as with full-band audio) |
   | Disease, normal vs abnormal pigs recorded with the **same** device | AUC 0.54, i.e. chance. Only 2 such abnormal pigs exist in the data |
   | Disease, 10 new clips (all 4 kHz) from Prof. Huang's lab | sick pigs: 5 / 5 abnormal. Healthy pigs: 3 / 5 wrongly abnormal |
+  | Breathing type, 4 classes | macro F1 **0.20** (chance 0.25). Light breathing exists in only 2 pigs and is never recognised; accuracy per held-out pig ranges 0–100 %, i.e. it mostly recognises the recording. Earlier tests with five other methods (loudness, OPERA, CLAP, audio LLMs) gave the same result |
 
   The paper's 3-class score (macro F1 0.871) used full-band audio and mostly reflects the recording-format difference
   described in §1, so it does not carry over to this server. The disease head needs normal and abnormal pigs
@@ -193,7 +210,7 @@ A 1-minute recording takes ~4–12 s on a CPU-only container. A GPU isn't needed
 
 ## 6. Known limitations
 
-- **Disease result is experimental** (see §5). Breathing detection is the dependable part.
+- **Disease and breathing type are experimental** (see §5). Breathing detection is the dependable part.
 - Trained on **stethoscope** recordings. Phone-microphone or video audio is out of distribution, so expect more yellow
   results and less reliable colours. The 4 kHz reduction removes the file-format effect, but other differences between
   recording setups (background noise, gain, placement) can still influence the disease score.
@@ -207,10 +224,11 @@ A 1-minute recording takes ~4–12 s on a CPU-only container. A GPU isn't needed
 ```
 app/main.py            HTTP API (FastAPI)
 app/triage.py          model loading + audio → breathing / disease / traffic light (thresholds at the top)
-model/breathing_head.json, model/disease_head.json   XGBoost heads (the AST weights come from Hugging Face)
+model/breathing_head.json, model/disease_head.json, model/breathing_type_head.json   XGBoost heads (the AST weights come from Hugging Face)
 scripts/download_model.py   download + checksum-verify the AST weights into model/ast/
 scripts/extract_features.py band-limited AST embeddings from labelled clips (lab only: needs the raw audio)
-scripts/train_heads.py      train both heads from those embeddings
+scripts/train_heads.py      train the breathing + disease heads from those embeddings
+scripts/train_breathing_type.py  train + evaluate the breathing-type head (lab only: needs the raw audio and labels)
 examples/test_client.py  send files to the server from the command line
 examples/sample_response.json
 Dockerfile, requirements.txt

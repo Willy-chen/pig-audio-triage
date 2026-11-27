@@ -11,6 +11,16 @@
         "p_abnormal": 0.5027,
         "experimental": true
     },
+    "breathing_type": {
+        "type": "heavy_breathing",
+        "probabilities": {
+            "breathing": 0.1815,
+            "light_breathing": 0.0054,
+            "heavy_breathing": 0.7965,
+            "heavy_breathing_with_noises": 0.0166
+        },
+        "experimental": true
+    },
     "probabilities": {
         "no_breathing": 0.0352,
         "normal": 0.4622,
@@ -28,6 +38,12 @@
                 "no_breathing": 0.002,
                 "normal": 0.0028,
                 "abnormal": 0.9952
+            },
+            "breathing_type": {
+                "breathing": 0.3591,
+                "light_breathing": 0.0094,
+                "heavy_breathing": 0.6021,
+                "heavy_breathing_with_noises": 0.0294
             }
         },
         {
@@ -40,8 +56,14 @@
                 "no_breathing": 0.0684,
                 "normal": 0.9216,
                 "abnormal": 0.0101
+            },
+            "breathing_type": {
+                "breathing": 0.0039,
+                "light_breathing": 0.0014,
+                "heavy_breathing": 0.9909,
+                "heavy_breathing_with_noises": 0.0039
             }
         }
     ],
-    "processing_s": 2.18
+    "processing_s": 1.12
 }

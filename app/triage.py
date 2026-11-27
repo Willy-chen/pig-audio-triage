@@ -16,11 +16,13 @@ T_BREATHING = 0.70        # clip counts as "breathing" if P(breathing) >= 0.70
 MIN_BREATHING_FRAC = 0.5  # recording counts as "breathing detected" if >= half of its clips are breathing
 CLASSES = ("no_breathing", "normal", "abnormal")
 T_ABNORMAL = 0.25         # disease (experimental): "abnormal" if mean P(abnormal) over breathing clips >= 0.25
+BREATHING_TYPES = ("breathing", "light_breathing", "heavy_breathing", "heavy_breathing_with_noises")  # experimental
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 AST_MODEL = os.environ.get("AST_MODEL", "willychenwii/pig-respiratory-ast")
 BREATHING_HEAD = os.environ.get("BREATHING_HEAD", os.path.join(HERE, "..", "model", "breathing_head.json"))
 DISEASE_HEAD = os.environ.get("DISEASE_HEAD", os.path.join(HERE, "..", "model", "disease_head.json"))
+BREATHING_TYPE_HEAD = os.environ.get("BREATHING_TYPE_HEAD", os.path.join(HERE, "..", "model", "breathing_type_head.json"))
 
 
 def load_bandlimited(path):
@@ -33,12 +35,14 @@ def load_bandlimited(path):
 
 
 class Triage:
-    def __init__(self, ast_model=AST_MODEL, breathing_head=BREATHING_HEAD, disease_head=DISEASE_HEAD):
+    def __init__(self, ast_model=AST_MODEL, breathing_head=BREATHING_HEAD, disease_head=DISEASE_HEAD,
+                 breathing_type_head=BREATHING_TYPE_HEAD):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.fe = ASTFeatureExtractor.from_pretrained(ast_model)
         self.ast = ASTModel.from_pretrained(ast_model).to(self.device).eval()
         self.breathing_head = xgb.Booster(model_file=breathing_head)   # binary: P(breathing)
         self.disease_head = xgb.Booster(model_file=disease_head)       # 3-class: [no-breathing, normal, abnormal]
+        self.breathing_type_head = xgb.Booster(model_file=breathing_type_head)  # 4-class effort level (experimental)
         self.ast_model = ast_model
 
     def clips(self, y):
@@ -65,6 +69,7 @@ class Triage:
         p_breath = self.breathing_head.predict(D)
         P3 = self.disease_head.predict(D)               # 3-class probabilities per clip
         p_abn = P3[:, 2]
+        P4 = self.breathing_type_head.predict(D)        # 4-class breathing type per clip
         is_breath = p_breath >= T_BREATHING
 
         detected = is_breath.mean() >= MIN_BREATHING_FRAC
@@ -82,6 +87,14 @@ class Triage:
             disease = {"status": "unknown", "p_abnormal": None}
         disease["experimental"] = True
 
+        if is_breath.any():                       # breathing type: averaged over breathing clips only
+            m4 = P4[is_breath].mean(0)
+            breathing_type = {"type": BREATHING_TYPES[int(m4.argmax())],
+                              "probabilities": {c: round(float(v), 4) for c, v in zip(BREATHING_TYPES, m4)}}
+        else:
+            breathing_type = {"type": None, "probabilities": None}
+        breathing_type["experimental"] = True
+
         if not detected:
             status = "yellow"                     # no clear breathing: re-record
         elif disease["status"] == "abnormal":
@@ -93,12 +106,14 @@ class Triage:
             "status": status,
             "breathing": breathing,
             "disease": disease,
+            "breathing_type": breathing_type,
             "probabilities": {c: round(float(v), 4) for c, v in zip(CLASSES, P3.mean(0))},
             "duration_s": round(duration, 2),
             "segments": [
                 {"start_s": round(t, 2), "end_s": round(min(t + CLIP_S, duration), 2),
                  "breathing": bool(b), "p_breathing": round(float(pb), 4), "p_abnormal": round(float(pa), 4),
-                 "probabilities": {c: round(float(v), 4) for c, v in zip(CLASSES, p3)}}
-                for (t, _), b, pb, pa, p3 in zip(clips, is_breath, p_breath, p_abn, P3)
+                 "probabilities": {c: round(float(v), 4) for c, v in zip(CLASSES, p3)},
+                 "breathing_type": {c: round(float(v), 4) for c, v in zip(BREATHING_TYPES, p4)}}
+                for (t, _), b, pb, pa, p3, p4 in zip(clips, is_breath, p_breath, p_abn, P3, P4)
             ],
         }
