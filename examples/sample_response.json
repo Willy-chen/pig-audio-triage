@@ -4,7 +4,9 @@
         "status": "detected",
         "p_breathing": 0.9921,
         "breathing_clips": 2,
-        "total_clips": 2
+        "total_clips": 2,
+        "breathing_fraction": 1.0,
+        "noise_fraction": 0.0
     },
     "disease": {
         "status": "abnormal",
@@ -19,6 +21,19 @@
             "heavy_breathing": 0.7965,
             "heavy_breathing_with_noises": 0.0166
         },
+        "clip_fractions": {
+            "breathing": 0.0,
+            "light_breathing": 0.0,
+            "heavy_breathing": 1.0,
+            "heavy_breathing_with_noises": 0.0
+        },
+        "experimental": true
+    },
+    "respiration": {
+        "rate_bpm": 14.9,
+        "regularity": 0.308,
+        "reliable": false,
+        "amplitude_db": -20.5,
         "experimental": true
     },
     "probabilities": {
@@ -65,5 +80,5 @@
             }
         }
     ],
-    "processing_s": 1.12
+    "processing_s": 1.24
 }

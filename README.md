@@ -5,6 +5,11 @@ A small Python server for the 晶創 platform: **upload a pig breathing recordin
 1. **Breathing**: is there clear pig breathing in the recording? *(reliable)*
 2. **Disease**: does the breathing sound normal or abnormal? *(experimental, see the warning below)*
 3. **Breathing type**: breathing / light / heavy / heavy with noises, as 4 probabilities *(experimental, close to random, see §5)*
+4. **Respiration**: breathing rate (breaths/min) and loudness *(experimental, not validated against counted breaths)*
+
+Following the 2026-11-27 meeting, the response is organised in two stages:
+**stage 1** = how much of the recording is breathing vs noise/silence (`breathing.breathing_fraction` / `noise_fraction`);
+**stage 2** = within the breathing part, the share of each breathing type (`breathing_type.clip_fractions`).
 
 plus one combined traffic light (🟢 / 🟡 / 🔴) for a simple farmer view.
 The web app (Firebase) calls this server over HTTP. The server holds the ML model, so the web app doesn't need Python.
@@ -40,6 +45,7 @@ format it arrives in. Breathing sounds sit well below 2 kHz.
 | **Breathing** | a clip is "breathing" if P(breathing) ≥ 0.70; the recording is `detected` if at least half its clips are | `detected` / `not_detected` |
 | **Disease** *(experimental)* | mean P(abnormal) over the **breathing clips only** ≥ 0.25 → `abnormal` | `normal` / `abnormal` / `unknown` (no breathing clips) |
 | **Breathing type** *(experimental)* | mean of the 4 probabilities over the **breathing clips only**; `type` = the highest | `breathing` / `light_breathing` / `heavy_breathing` / `heavy_breathing_with_noises` / `null` |
+| **Respiration** *(experimental)* | rate from the loudness envelope's rhythm (autocorrelation), whole recording; only when breathing is detected | `rate_bpm` (10–100 or `null`), `reliable` true only if ≥ 20 s and regularity ≥ 0.4 |
 
 ### Combined traffic light (`status`)
 
@@ -93,11 +99,15 @@ Full example: [`examples/sample_response.json`](examples/sample_response.json).
 ```json
 {
   "status": "red",
-  "breathing": {"status": "detected", "p_breathing": 0.9921, "breathing_clips": 2, "total_clips": 2},
+  "breathing": {"status": "detected", "p_breathing": 0.9921, "breathing_clips": 2, "total_clips": 2,
+                "breathing_fraction": 1.0, "noise_fraction": 0.0},
   "disease":   {"status": "abnormal", "p_abnormal": 0.5027, "experimental": true},
   "breathing_type": {"type": "heavy_breathing", "experimental": true,
                      "probabilities": {"breathing": 0.1815, "light_breathing": 0.0054,
-                                       "heavy_breathing": 0.7965, "heavy_breathing_with_noises": 0.0166}},
+                                       "heavy_breathing": 0.7965, "heavy_breathing_with_noises": 0.0166},
+                     "clip_fractions": {"breathing": 0.0, "light_breathing": 0.0,
+                                        "heavy_breathing": 1.0, "heavy_breathing_with_noises": 0.0}},
+  "respiration": {"rate_bpm": 14.9, "regularity": 0.308, "reliable": false, "amplitude_db": -20.5, "experimental": true},
   "probabilities": {"no_breathing": 0.0352, "normal": 0.4622, "abnormal": 0.5027},
   "duration_s": 12.0,
   "segments": [
@@ -119,6 +129,14 @@ Fields:
 - `breathing_type`: 4 probabilities from a third head, averaged over breathing clips (`null` if there are none); also
   per clip in `segments`. "With noises" means **electronic noise from the recording device**, not a lung sound.
   Close to random on pigs it hasn't seen (see §5): show it as an experimental score, not a finding.
+- `breathing.breathing_fraction` / `noise_fraction` (stage 1): share of 10 s clips with / without breathing. Use as a
+  recording-quality indicator ("70 % usable breathing").
+- `breathing_type.clip_fractions` (stage 2): share of the breathing clips whose most likely type is each class.
+- `respiration.rate_bpm`: breaths per minute from the rhythm of the loudness envelope. `regularity` (0–1) = how clear
+  that rhythm is. Treat `reliable: false` as "no reliable estimate"; 10 s clips are usually too short. Not yet checked
+  against hand-counted breaths, and a stethoscope on the neck can also pick up the heartbeat.
+  `amplitude_db` = loudness (90th percentile, dB re full scale): depends on device gain and placement, so compare only
+  recordings of the same pig with the same device.
 - `breathing.p_breathing`: from the separate breathing head, which is more reliable for "is there breathing" than
   `1 - probabilities.no_breathing`.
 

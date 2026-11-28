@@ -18,6 +18,11 @@ CLASSES = ("no_breathing", "normal", "abnormal")
 T_ABNORMAL = 0.25         # disease (experimental): "abnormal" if mean P(abnormal) over breathing clips >= 0.25
 BREATHING_TYPES = ("breathing", "light_breathing", "heavy_breathing", "heavy_breathing_with_noises")  # experimental
 
+# breathing rate (experimental): autocorrelation of the loudness envelope, as in the lab's arm_a/breath_rate.py
+ENV_HOP = 1024            # envelope frame = 64 ms at 16 kHz
+RATE_MIN_BPM, RATE_MAX_BPM = 10, 100
+RATE_MIN_S, RATE_MIN_REGULARITY = 20.0, 0.4   # below these the rate is returned but flagged reliable=false
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 AST_MODEL = os.environ.get("AST_MODEL", "willychenwii/pig-respiratory-ast")
 BREATHING_HEAD = os.environ.get("BREATHING_HEAD", os.path.join(HERE, "..", "model", "breathing_head.json"))
@@ -32,6 +37,26 @@ def load_bandlimited(path):
     stops the model from reacting to the recording format instead of the pig."""
     y, _ = librosa.load(path, sr=BAND_SR, mono=True)
     return librosa.resample(y, orig_sr=BAND_SR, target_sr=SR)
+
+
+def breathing_rate(y):
+    """Breaths per minute from the loudness envelope (autocorrelation peak). Returns (bpm, regularity 0..1) or
+    (None, None) if the recording is too short or has no clear rhythm. Not validated against counted breaths."""
+    fps = SR / ENV_HOP
+    e = librosa.feature.rms(y=y, frame_length=4 * ENV_HOP, hop_length=ENV_HOP)[0]
+    e = e - e.mean()
+    lo, hi = int(fps * 60 / RATE_MAX_BPM), int(fps * 60 / RATE_MIN_BPM)
+    hi = min(hi, len(e) // 2)              # need at least two cycles
+    if hi <= lo or e.std() < 1e-8:
+        return None, None
+    ac = np.correlate(e, e, "full")[len(e) - 1:]
+    ac /= ac[0] + 1e-12
+    # strongest true local peak in the lag range (the edge of the range is not a peak: autocorrelation falls with lag)
+    peaks = [k for k in range(max(lo, 1), hi) if ac[k] > ac[k - 1] and ac[k] >= ac[k + 1]]
+    if not peaks:
+        return None, None
+    k = max(peaks, key=lambda k: ac[k])
+    return 60 * fps / k, float(ac[k])
 
 
 class Triage:
@@ -73,11 +98,13 @@ class Triage:
         is_breath = p_breath >= T_BREATHING
 
         detected = is_breath.mean() >= MIN_BREATHING_FRAC
-        breathing = {
+        breathing = {                             # stage 1: how much of the recording is usable breathing
             "status": "detected" if detected else "not_detected",
             "p_breathing": round(float(p_breath.mean()), 4),
             "breathing_clips": int(is_breath.sum()),
             "total_clips": len(clips),
+            "breathing_fraction": round(float(is_breath.mean()), 4),
+            "noise_fraction": round(1 - float(is_breath.mean()), 4),
         }
         if is_breath.any():
             mean_abn = float(p_abn[is_breath].mean())
@@ -89,11 +116,24 @@ class Triage:
 
         if is_breath.any():                       # breathing type: averaged over breathing clips only
             m4 = P4[is_breath].mean(0)
+            top = P4[is_breath].argmax(1)          # stage 2: share of breathing clips of each type
             breathing_type = {"type": BREATHING_TYPES[int(m4.argmax())],
-                              "probabilities": {c: round(float(v), 4) for c, v in zip(BREATHING_TYPES, m4)}}
+                              "probabilities": {c: round(float(v), 4) for c, v in zip(BREATHING_TYPES, m4)},
+                              "clip_fractions": {c: round(float((top == i).mean()), 4)
+                                                 for i, c in enumerate(BREATHING_TYPES)}}
         else:
-            breathing_type = {"type": None, "probabilities": None}
+            breathing_type = {"type": None, "probabilities": None, "clip_fractions": None}
         breathing_type["experimental"] = True
+
+        bpm, regularity = breathing_rate(y) if detected else (None, None)
+        amp = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)[0]
+        respiration = {
+            "rate_bpm": None if bpm is None else round(bpm, 1),
+            "regularity": None if regularity is None else round(regularity, 3),
+            "reliable": bool(bpm is not None and duration >= RATE_MIN_S and regularity >= RATE_MIN_REGULARITY),
+            "amplitude_db": round(float(20 * np.log10(np.percentile(amp, 90) + 1e-9)), 1),
+            "experimental": True,
+        }
 
         if not detected:
             status = "yellow"                     # no clear breathing: re-record
@@ -107,6 +147,7 @@ class Triage:
             "breathing": breathing,
             "disease": disease,
             "breathing_type": breathing_type,
+            "respiration": respiration,
             "probabilities": {c: round(float(v), 4) for c, v in zip(CLASSES, P3.mean(0))},
             "duration_s": round(duration, 2),
             "segments": [

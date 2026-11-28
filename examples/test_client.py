@@ -27,6 +27,9 @@ for path in a.files:
           f"     breathing: {b['status']} (P={b['p_breathing']}, {b['breathing_clips']}/{b['total_clips']} clips)  |  "
           f"disease [experimental]: {d['status']} (P(abnormal)={d['p_abnormal']})  |  "
           f"{res['duration_s']} s audio, {res['processing_s']} s\n"
-          f"     breathing type [experimental]: {bt['type']}  {bt['probabilities']}")
+          f"     breathing type [experimental]: {bt['type']}  clip fractions {bt['clip_fractions']}\n"
+          f"     respiration [experimental]: {res['respiration']['rate_bpm']} breaths/min "
+          f"(regularity {res['respiration']['regularity']}, reliable={res['respiration']['reliable']}), amplitude {res['respiration']['amplitude_db']} dB  |  "
+          f"breathing {b['breathing_fraction']:.0%} / noise {b['noise_fraction']:.0%}")
     if a.full:
         print(json.dumps(res, indent=2, ensure_ascii=False))

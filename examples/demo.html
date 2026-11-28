@@ -20,7 +20,7 @@
   #cards { display:grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap:14px; }
   .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:14px 16px; display:grid; grid-template-columns: 64px 1fr; gap:4px 14px; animation: in .25s ease-out; }
   @keyframes in { from { opacity:0; transform: translateY(6px);} to { opacity:1; transform:none; } }
-  .light { grid-row: span 6; width:56px; height:56px; border-radius:50%; background:#e5e7eb; align-self:start; margin-top:2px; }
+  .light { grid-row: span 8; width:56px; height:56px; border-radius:50%; background:#e5e7eb; align-self:start; margin-top:2px; }
   .light.green { background:var(--g); box-shadow:0 0 0 5px #1f9d5522; }
   .light.yellow { background:var(--y); box-shadow:0 0 0 5px #d69e0022; }
   .light.red { background:var(--r); box-shadow:0 0 0 5px #d6454522; }
@@ -73,7 +73,10 @@ async function analyze(file) {
   const b = res.breathing, d = res.disease, p = res.probabilities, bt = res.breathing_type;
   const btBlock = !bt.probabilities ? `<div class="legend">breathing type<span class="tag">experimental</span>: none (no breathing)</div>` :
     `<div class="bars">${Object.keys(BT).map(k => `<div style="width:${(bt.probabilities[k]*100).toFixed(1)}%;background:${BT[k][0]}"></div>`).join("")}</div>
-     <div class="legend">breathing type<span class="tag">experimental</span>: <b>${BT[bt.type][1]}</b> · ${Object.keys(BT).map(k => `${BT[k][1]} ${bt.probabilities[k].toFixed(2)}`).join(" · ")}</div>`;
+     <div class="legend">breathing type<span class="tag">experimental</span>: <b>${BT[bt.type][1]}</b> · ${Object.keys(BT).map(k => `${BT[k][1]} ${bt.probabilities[k].toFixed(2)}`).join(" · ")}</div>
+     <div class="legend">share of breathing clips: ${Object.keys(BT).map(k => `${BT[k][1]} ${Math.round(bt.clip_fractions[k]*100)}%`).join(" · ")}</div>`;
+  const r = res.respiration;
+  const rate = r.rate_bpm === null ? "no estimate" : `${r.rate_bpm} breaths/min${r.reliable ? "" : " (unreliable: short or irregular)"}`;
   const bars = Object.keys(C).map(k => `<div style="width:${(p[k]*100).toFixed(1)}%;background:${C[k]}"></div>`).join("");
   const segs = res.segments.map(s => {
     const col = !s.breathing ? C.no_breathing : (s.p_abnormal >= 0.25 ? C.abnormal : C.normal);
@@ -83,6 +86,7 @@ async function analyze(file) {
     <div class="light ${res.status}"></div>
     <div class="name">${file.name}</div>
     <div class="row"><b>${TXT[res.status]}</b></div>
+    <div class="row">Stage 1, recording quality: <b>${Math.round(b.breathing_fraction*100)}% breathing</b> / ${Math.round(b.noise_fraction*100)}% noise or silence</div>
     <div class="row">Breathing: <b>${b.status.replace("_", " ")}</b> (P=${b.p_breathing.toFixed(2)}, ${b.breathing_clips}/${b.total_clips} clips)
       &nbsp;·&nbsp; Disease<span class="tag">experimental</span>: <b>${d.status}</b>${d.p_abnormal === null ? "" : ` (P=${d.p_abnormal.toFixed(2)})`}</div>
     <div>
@@ -91,6 +95,7 @@ async function analyze(file) {
       <div class="segs">${segs}</div>
     </div>
     <div>${btBlock}</div>
+    <div class="row">Respiration<span class="tag">experimental</span>: ${rate} · loudness ${r.amplitude_db} dB</div>
     <div class="meta">${res.duration_s} s audio · analyzed in ${res.processing_s} s</div>`;
 }
 document.getElementById("f").addEventListener("change", async e => {
